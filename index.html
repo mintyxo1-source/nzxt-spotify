@@ -37,7 +37,7 @@
       position: absolute;
       width: 250%;
       height: 250%;
-      background: var(--border-gradient, conic-gradient(#1db954, #ffffff, #107c41, #1db954));
+      background: conic-gradient(#1db954, #ffffff, #107c41, #1db954);
       animation: rotate 6s linear infinite;
       z-index: 1;
     }
@@ -49,14 +49,16 @@
 
     .inner-box {
       position: relative;
-      width: calc(100vw - 16px); /* 8px border thickness on all sides */
+      width: calc(100vw - 16px);
       height: calc(100vh - 16px);
       background-color: #000;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       z-index: 2;
       overflow: hidden;
+      text-align: center;
     }
 
     #album-art {
@@ -70,12 +72,20 @@
       background-color: #1db954;
       color: #fff;
       border: none;
-      padding: 10px 16px;
-      font-size: 12px;
+      padding: 12px 20px;
+      font-size: 14px;
       font-weight: bold;
       border-radius: 20px;
       cursor: pointer;
       text-decoration: none;
+      z-index: 10;
+    }
+
+    #status-msg {
+      font-size: 11px;
+      color: #888;
+      margin-top: 10px;
+      display: none;
       z-index: 10;
     }
   </style>
@@ -86,6 +96,7 @@
     <div class="spinner" id="spinner"></div>
     <div class="inner-box">
       <a id="login-btn" href="#" style="display: none;">Connect Spotify</a>
+      <p id="status-msg">Not Playing / Re-authenticating...</p>
       <img id="album-art" src="" alt="Album Art" />
     </div>
   </div>
@@ -94,6 +105,13 @@
     const CLIENT_ID = '9b87c876f27945408aaa274242241d5c';
     const REDIRECT_URI = window.location.origin + window.location.pathname;
     const SCOPES = 'user-read-currently-playing user-read-playback-state';
+
+    // Emergency reset parameter: navigate to your-url/?logout=true to clear cached auth
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('logout') === 'true') {
+      localStorage.clear();
+      window.location.href = window.location.pathname;
+    }
 
     function generateRandomString(length) {
       let text = '';
@@ -152,6 +170,8 @@
         if (data.refresh_token) localStorage.setItem('spotify_refresh_token', data.refresh_token);
         window.history.replaceState({}, document.title, window.location.pathname);
         initDisplay();
+      } else {
+        showLogin();
       }
     }
 
@@ -165,56 +185,32 @@
         refresh_token: refreshToken
       });
 
-      const response = await fetch('https://accounts.spotify.com/api/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params
-      });
+      try {
+        const response = await fetch('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params
+        });
 
-      const data = await response.json();
-      if (data.access_token) {
-        localStorage.setItem('spotify_token', data.access_token);
-        if (data.refresh_token) localStorage.setItem('spotify_refresh_token', data.refresh_token);
-        return true;
+        const data = await response.json();
+        if (data.access_token) {
+          localStorage.setItem('spotify_token', data.access_token);
+          if (data.refresh_token) localStorage.setItem('spotify_refresh_token', data.refresh_token);
+          return true;
+        }
+      } catch (e) {
+        console.error(e);
       }
       return false;
     }
 
-    // Safely extract dominant colors in background without breaking image render
-    function updateBorderColors(imgUrl) {
-      const img = new Image();
-      img.crossOrigin = 'Anonymous';
-      img.src = imgUrl;
-
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          canvas.width = 10;
-          canvas.height = 10;
-          ctx.drawImage(img, 0, 0, 10, 10);
-          const data = ctx.getImageData(0, 0, 10, 10).data;
-
-          const c1 = `rgb(${data[0]}, ${data[1]}, ${data[2]})`;
-          const c2 = `rgb(${data[40]}, ${data[41]}, ${data[42]})`;
-          const c3 = `rgb(${data[120]}, ${data[121]}, ${data[122]})`;
-
-          document.getElementById('spinner').style.setProperty(
-            '--border-gradient',
-            `conic-gradient(${c1}, ${c2}, ${c3}, ${c1})`
-          );
-        } catch (e) {
-          // Default fallback gradient if CORS blocks canvas read
-          document.getElementById('spinner').style.setProperty(
-            '--border-gradient',
-            `conic-gradient(#1db954, #ffffff, #107c41, #1db954)`
-          );
-        }
-      };
-    }
-
     async function fetchCurrentlyPlaying() {
       const token = localStorage.getItem('spotify_token');
+      if (!token) {
+        showLogin();
+        return;
+      }
+
       try {
         const response = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -222,6 +218,8 @@
 
         if (response.status === 204 || response.status === 202) {
           document.getElementById('album-art').style.display = 'none';
+          document.getElementById('status-msg').style.display = 'block';
+          document.getElementById('status-msg').innerText = 'Nothing Playing';
           return;
         }
 
@@ -235,24 +233,24 @@
         }
 
         const data = await response.json();
-        if (data && data.item) {
-          const albumArtUrl = data.item.album.images[0]?.url;
-          if (albumArtUrl) {
-            const artEl = document.getElementById('album-art');
-            if (artEl.src !== albumArtUrl) {
-              artEl.src = albumArtUrl;
-              updateBorderColors(albumArtUrl);
-            }
-            artEl.style.display = 'block';
-            document.getElementById('login-btn').style.display = 'none';
+        if (data && data.item && data.item.album.images.length > 0) {
+          const albumArtUrl = data.item.album.images[0].url;
+          const artEl = document.getElementById('album-art');
+          if (artEl.src !== albumArtUrl) {
+            artEl.src = albumArtUrl;
           }
+          artEl.style.display = 'block';
+          document.getElementById('login-btn').style.display = 'none';
+          document.getElementById('status-msg').style.display = 'none';
         }
       } catch (err) {
-        console.error('Error:', err);
+        console.error('Error fetching track:', err);
       }
     }
 
     function showLogin() {
+      document.getElementById('album-art').style.display = 'none';
+      document.getElementById('status-msg').style.display = 'none';
       const loginBtn = document.getElementById('login-btn');
       loginBtn.style.display = 'inline-block';
       loginBtn.onclick = (e) => {
@@ -267,7 +265,6 @@
       setInterval(fetchCurrentlyPlaying, 1000);
     }
 
-    const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     const token = localStorage.getItem('spotify_token');
 
