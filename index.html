@@ -48,7 +48,7 @@
       to { transform: rotate(360deg); }
     }
 
-    /* Mask keeping the border constrained to 8px width */
+    /* Mask keeping the border constrained to an 8px ring */
     .inner-box {
       position: absolute;
       top: 8px;
@@ -297,28 +297,22 @@
 
         const data = await response.json();
         
-        if (data && data.item) {
-          // Extract artwork URL from track, podcast episode, or default fallback
-          const albumArtUrl = data.item.album?.images?.[0]?.url 
-            || data.item.show?.images?.[0]?.url 
-            || 'https://i.scdn.co/image/ab67616d0000b2734e036e76ba29272826cf8d80';
+        // Extract image URL across music tracks, podcasts, or fallback placeholder
+        const albumArtUrl = data?.item?.album?.images?.[0]?.url 
+          || data?.item?.show?.images?.[0]?.url 
+          || 'https://i.scdn.co/image/ab67616d0000b2734e036e76ba29272826cf8d80';
 
-          const artEl = document.getElementById('album-art');
-          if (artEl.getAttribute('src') !== albumArtUrl) {
-            artEl.src = albumArtUrl;
-            extractColorsSafe(albumArtUrl);
-          }
-          
-          artEl.style.display = 'block';
-          document.getElementById('login-btn').style.display = 'none';
-          document.getElementById('status-msg').style.display = 'none';
-          document.getElementById('reset-link').style.display = 'none';
-        } else {
-          document.getElementById('album-art').style.display = 'none';
-          document.getElementById('status-msg').style.display = 'block';
-          document.getElementById('status-msg').innerText = 'No Track Details';
-          document.getElementById('reset-link').style.display = 'inline';
+        const artEl = document.getElementById('album-art');
+        if (artEl.getAttribute('src') !== albumArtUrl) {
+          artEl.src = albumArtUrl;
+          extractColorsSafe(albumArtUrl);
         }
+        
+        artEl.style.display = 'block';
+        document.getElementById('login-btn').style.display = 'none';
+        document.getElementById('status-msg').style.display = 'none';
+        document.getElementById('reset-link').style.display = 'none';
+
       } catch (err) {
         console.error('Fetch error:', err);
       }
