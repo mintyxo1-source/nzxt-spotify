@@ -106,7 +106,7 @@
     const CLIENT_ID = '9b87c876f27945408aaa274242241d5c';
     const REDIRECT_URI = window.location.origin + window.location.pathname;
     const SCOPES = 'user-read-currently-playing user-read-playback-state';
-    const POLL_MS = 3000;
+    const POLL_MS = 5000;
 
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('logout') === 'true') {
@@ -252,6 +252,7 @@
 
     let pollTimer = null;
     let pausedUntil = 0;
+    let rateLimitHits = 0;
 
     async function fetchCurrentlyPlaying() {
       if (Date.now() < pausedUntil) return;
@@ -267,6 +268,17 @@
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
+        if (response.status === 429) {
+          const header = parseInt(response.headers.get('Retry-After'), 10);
+          rateLimitHits = Math.min(rateLimitHits + 1, 6);
+          const wait = header || Math.min(10 * rateLimitHits, 60);
+          pausedUntil = Date.now() + wait * 1000;
+          setStatus('Rate limited, retrying in ' + wait + 's');
+          return;
+        }
+
+        rateLimitHits = 0;
+
         if (response.status === 204 || response.status === 202) {
           document.getElementById('album-art').style.display = 'none';
           setStatus('Nothing Playing');
@@ -279,13 +291,6 @@
             localStorage.clear();
             showLogin();
           }
-          return;
-        }
-
-        if (response.status === 429) {
-          const wait = parseInt(response.headers.get('Retry-After') || '5', 10);
-          pausedUntil = Date.now() + wait * 1000;
-          setStatus('Rate limited, retrying in ' + wait + 's');
           return;
         }
 
