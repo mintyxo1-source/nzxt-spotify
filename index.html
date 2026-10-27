@@ -37,7 +37,7 @@
       position: absolute;
       width: 250%;
       height: 250%;
-      background: conic-gradient(#1db954, #ffffff, #107c41, #1db954);
+      background: var(--border-gradient, conic-gradient(#1db954, #ffffff, #107c41, #1db954));
       animation: rotate 6s linear infinite;
       z-index: 1;
     }
@@ -96,7 +96,7 @@
     <div class="spinner" id="spinner"></div>
     <div class="inner-box">
       <a id="login-btn" href="#" style="display: none;">Connect Spotify</a>
-      <p id="status-msg">Not Playing / Re-authenticating...</p>
+      <p id="status-msg">Loading Spotify...</p>
       <img id="album-art" src="" alt="Album Art" />
     </div>
   </div>
@@ -106,7 +106,6 @@
     const REDIRECT_URI = window.location.origin + window.location.pathname;
     const SCOPES = 'user-read-currently-playing user-read-playback-state';
 
-    // Emergency reset parameter: navigate to your-url/?logout=true to clear cached auth
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('logout') === 'true') {
       localStorage.clear();
@@ -204,6 +203,35 @@
       return false;
     }
 
+    function extractColorsSafe(imgUrl) {
+      const tempImg = new Image();
+      tempImg.crossOrigin = 'Anonymous';
+      tempImg.src = imgUrl;
+      tempImg.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = 5;
+          canvas.height = 5;
+          ctx.drawImage(tempImg, 0, 0, 5, 5);
+          const data = ctx.getImageData(0, 0, 5, 5).data;
+          const c1 = `rgb(${data[0]}, ${data[1]}, ${data[2]})`;
+          const c2 = `rgb(${data[20]}, ${data[21]}, ${data[22]})`;
+          const c3 = `rgb(${data[40]}, ${data[41]}, ${data[42]})`;
+          document.getElementById('spinner').style.setProperty(
+            '--border-gradient',
+            `conic-gradient(${c1}, ${c2}, ${c3}, ${c1})`
+          );
+        } catch (e) {
+          // Fallback if CORS blocks canvas reading
+          document.getElementById('spinner').style.setProperty(
+            '--border-gradient',
+            `conic-gradient(#1db954, #ffffff, #107c41, #1db954)`
+          );
+        }
+      };
+    }
+
     async function fetchCurrentlyPlaying() {
       const token = localStorage.getItem('spotify_token');
       if (!token) {
@@ -233,15 +261,22 @@
         }
 
         const data = await response.json();
-        if (data && data.item && data.item.album.images.length > 0) {
+        if (data && data.item && data.item.album && data.item.album.images.length > 0) {
           const albumArtUrl = data.item.album.images[0].url;
           const artEl = document.getElementById('album-art');
+          
           if (artEl.src !== albumArtUrl) {
             artEl.src = albumArtUrl;
+            extractColorsSafe(albumArtUrl);
           }
+          
           artEl.style.display = 'block';
           document.getElementById('login-btn').style.display = 'none';
           document.getElementById('status-msg').style.display = 'none';
+        } else {
+          document.getElementById('album-art').style.display = 'none';
+          document.getElementById('status-msg').style.display = 'block';
+          document.getElementById('status-msg').innerText = 'No Album Art Available';
         }
       } catch (err) {
         console.error('Error fetching track:', err);
