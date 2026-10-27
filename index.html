@@ -125,6 +125,8 @@
     const REDIRECT_URI = window.location.origin + window.location.pathname;
     const SCOPES = 'user-read-currently-playing user-read-playback-state';
 
+    const FALLBACK_ART = 'https://i.scdn.co/image/ab67616d0000b2734e036e76ba29272826cf8d80';
+
     function forceLogout() {
       localStorage.clear();
       window.location.href = REDIRECT_URI;
@@ -231,7 +233,6 @@
       return false;
     }
 
-    // Color extraction isolated in an independent sandbox
     function extractColorsSafe(imgUrl) {
       if (!imgUrl) return;
       const tempImg = new Image();
@@ -255,7 +256,6 @@
             spinner.style.setProperty('--border-gradient', `conic-gradient(${c1}, ${c2}, ${c3}, ${c1})`);
           }
         } catch (e) {
-          // Default to green gradient on CORS restrictions
           document.getElementById('spinner').style.setProperty('--border-gradient', 'conic-gradient(#1db954, #ffffff, #107c41, #1db954)');
         }
       };
@@ -297,15 +297,28 @@
 
         const data = await response.json();
         
-        // Extract image URL across music tracks, podcasts, or fallback placeholder
-        const albumArtUrl = data?.item?.album?.images?.[0]?.url 
-          || data?.item?.show?.images?.[0]?.url 
-          || 'https://i.scdn.co/image/ab67616d0000b2734e036e76ba29272826cf8d80';
+        // Strictly resolve valid string URLs
+        let validUrl = null;
+        if (data?.item?.album?.images?.length > 0 && data.item.album.images[0].url) {
+          validUrl = data.item.album.images[0].url;
+        } else if (data?.item?.show?.images?.length > 0 && data.item.show.images[0].url) {
+          validUrl = data.item.show.images[0].url;
+        }
+
+        const finalUrl = validUrl || FALLBACK_ART;
 
         const artEl = document.getElementById('album-art');
-        if (artEl.getAttribute('src') !== albumArtUrl) {
-          artEl.src = albumArtUrl;
-          extractColorsSafe(albumArtUrl);
+        
+        // Set error handler in case image URL fails to load
+        artEl.onerror = () => {
+          if (artEl.src !== FALLBACK_ART) {
+            artEl.src = FALLBACK_ART;
+          }
+        };
+
+        if (artEl.getAttribute('src') !== finalUrl) {
+          artEl.src = finalUrl;
+          extractColorsSafe(finalUrl);
         }
         
         artEl.style.display = 'block';
