@@ -22,7 +22,6 @@
       justify-content: center;
     }
 
-    /* Outer wrapper filling the square screen */
     .screen-wrapper {
       position: relative;
       width: 100vw;
@@ -34,11 +33,10 @@
       overflow: hidden;
     }
 
-    /* Spinning background element positioned BEHIND everything */
     .spinner {
       position: absolute;
-      width: 200%;
-      height: 200%;
+      width: 250%;
+      height: 250%;
       background: var(--border-gradient, conic-gradient(#1db954, #ffffff, #107c41, #1db954));
       animation: rotate 6s linear infinite;
       z-index: 1;
@@ -49,10 +47,9 @@
       to { transform: rotate(360deg); }
     }
 
-    /* Inner box that leaves an 8px border gap around the image */
     .inner-box {
       position: relative;
-      width: calc(100vw - 16px);
+      width: calc(100vw - 16px); /* 8px border thickness on all sides */
       height: calc(100vh - 16px);
       background-color: #000;
       display: flex;
@@ -183,6 +180,7 @@
       return false;
     }
 
+    // Safely extract dominant colors in background without breaking image render
     function updateBorderColors(imgUrl) {
       const img = new Image();
       img.crossOrigin = 'Anonymous';
@@ -206,6 +204,7 @@
             `conic-gradient(${c1}, ${c2}, ${c3}, ${c1})`
           );
         } catch (e) {
+          // Default fallback gradient if CORS blocks canvas read
           document.getElementById('spinner').style.setProperty(
             '--border-gradient',
             `conic-gradient(#1db954, #ffffff, #107c41, #1db954)`
@@ -230,7 +229,7 @@
           const refreshed = await refreshAccessToken();
           if (!refreshed) {
             localStorage.clear();
-            window.location.reload();
+            showLogin();
           }
           return;
         }
@@ -245,11 +244,21 @@
               updateBorderColors(albumArtUrl);
             }
             artEl.style.display = 'block';
+            document.getElementById('login-btn').style.display = 'none';
           }
         }
       } catch (err) {
         console.error('Error:', err);
       }
+    }
+
+    function showLogin() {
+      const loginBtn = document.getElementById('login-btn');
+      loginBtn.style.display = 'inline-block';
+      loginBtn.onclick = (e) => {
+        e.preventDefault();
+        redirectToAuth();
+      };
     }
 
     function initDisplay() {
@@ -267,12 +276,7 @@
     } else if (token) {
       initDisplay();
     } else {
-      const loginBtn = document.getElementById('login-btn');
-      loginBtn.style.display = 'inline-block';
-      loginBtn.onclick = (e) => {
-        e.preventDefault();
-        redirectToAuth();
-      };
+      showLogin();
     }
   </script>
 </body>
