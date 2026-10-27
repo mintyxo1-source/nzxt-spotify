@@ -223,7 +223,6 @@
             `conic-gradient(${c1}, ${c2}, ${c3}, ${c1})`
           );
         } catch (e) {
-          // Fallback if CORS blocks canvas reading
           document.getElementById('spinner').style.setProperty(
             '--border-gradient',
             `conic-gradient(#1db954, #ffffff, #107c41, #1db954)`
@@ -261,10 +260,12 @@
         }
 
         const data = await response.json();
-        if (data && data.item && data.item.album && data.item.album.images.length > 0) {
-          const albumArtUrl = data.item.album.images[0].url;
+        if (data && data.item) {
+          const albumArtUrl = (data.item.album && data.item.album.images && data.item.album.images.length > 0)
+            ? data.item.album.images[0].url
+            : 'https://i.scdn.co/image/ab67616d0000b2734e036e76ba29272826cf8d80';
+
           const artEl = document.getElementById('album-art');
-          
           if (artEl.src !== albumArtUrl) {
             artEl.src = albumArtUrl;
             extractColorsSafe(albumArtUrl);
@@ -273,10 +274,6 @@
           artEl.style.display = 'block';
           document.getElementById('login-btn').style.display = 'none';
           document.getElementById('status-msg').style.display = 'none';
-        } else {
-          document.getElementById('album-art').style.display = 'none';
-          document.getElementById('status-msg').style.display = 'block';
-          document.getElementById('status-msg').innerText = 'No Album Art Available';
         }
       } catch (err) {
         console.error('Error fetching track:', err);
